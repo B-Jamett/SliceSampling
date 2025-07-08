@@ -1,0 +1,488 @@
+---
+title: Slice Sampling
+subtitle: Simulación Estadística
+format: clean-revealjs
+html-math-method:
+  method: mathjax
+  url: "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+author:
+  - name: Tamara Gallardo
+    email: tamara.gallardo.z@usach.cl
+  - name: Benjamin Jamett
+    email: benjamin.jamett@usach.cl
+  - name: Sofia Roca
+    email: sofia.roca@usach.cl
+date: last-modified
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+## Introducción
+
+El **Slice Sampling** es un método de simulación estadística utilizado para muestrear distribuciones de probabilidad complejas. Este informe tiene como objetivo detallar los fundamentos de este método, sus propiedades y su implementación en muestreo univariado y multivariado, todo esto en el contexto de las simulaciones MCMC.
+
+## Fundamentos del Método
+
+El **Slice Sampling** fue introducido por Radford M. Neal en 2003 y se utiliza para muestrear distribuciones de probabilidad en MCMC. La idea central es muestrear uniformemente desde la región bajo la curva de una función de densidad.
+
+**Pasos:**
+
+1. Definir el slice.
+2. Buscar un intervalo adecuado que contenga el punto actual.
+3. Muestrear el nuevo punto.
+
+## Propiedades
+
+1. **Invarianza de la distribución objetivo**: Garantiza que las muestras generadas sigan la misma distribución de probabilidad que se está muestreando.
+2. **Ergodicidad**: Independiente de donde se comience, eventualmente el algoritmo recorrera todos los estados del espacio de parámetros de la distribución.
+3. **Equilibrio detallado**: Asegura que las probabilidades de transición entre los estados del proceso de Markov sean simétricas.
+4. **Dependencia**: En el caso de distribuciones multivariantes, el algoritmo se adapta a las dependencia entre las variables.
+5. **Convergencia**: El algoritmo debe ser capaz de converger a la distribución objetivo después de suficientes iteraciones.
+
+<style>
+.reveal .slides section.scrollable {
+  max-height: none;
+  overflow-y: auto;
+  padding-right: 15px;
+}
+</style>
+
+## Slice Sampling Univariado {.scrollable}
+
+En el muestreo univariado, el Slice Sampling se utiliza para generar muestras a partir de una distribución univariada $f(x)$. El procedimiento consta de tres pasos:
+
+1. **Dibujar una variable auxiliar $y$**.
+
+Se genera una variable auxiliar $y\sim Uniforme(0,f(x_0))$ que define una slice $S=\{x:f(x)\geq y\}$. Por construcción, el valor actual $x_0\in S$ garantiza que hay al menos un valor válido para muestrear. 
+
+2. **Encontrar un intervalo $(L, R)$** que contenga una porción significativa de la rebanada S.
+
+Métodos para construir el intervalo:
+
+- Stepping out: Ancho inicial $w$, posición aleatoria $u \sim U(0,1)$. Sea $I=(x_0-uw, x_0+(1-u)w)$. Se expande el intervalo a izquierda y derecha de tamaño $w$ hasta que: $f(L)<y$ y $f(R)<y$.
+
+- Doubling: Comienza con un intervalo pequeño centrado en $x_0$ y lo duplica iterativamente $w\rightarrow 2w\rightarrow 4w...$ y se detiene cuando los extremos están fuera de la slice.
+
+3. **Muestrear un nuevo punto** ($x_1\in I\cap S$) dentro de ese intervalo.
+
+Muestrear un punto $x_1\sim U(L,R)$. Si $f(x_1)\geq y$ se acepta. Sino, se ajusta el intervalo $I$ mediante shrinkage: Si $x_1<x_0 \Rightarrow L\leftarrow x_1$. Si $x_1>x_0 \Rightarrow R\leftarrow x_1$. Esto se repite hasta aceptar un valor dentro de la slice.
+
+## Slice Sampling Multivariado
+
+### ¿Qué es?
+
+Es una extensión del enfoque univariado en donde se muestrea una
+probabilidad conjunta $f(x)$ con $x = (x_1,...,x_n)$. Se busca muestrear
+un punto completo definido por la altura de la densidad.
+
+-   Esto permite:
+    -   Capturar dependencias entre variables
+    -   Mejorar la eficacia de la exploración del espacio de parámetros
+
+Existen 3 enfoques para realizar este proceso:
+
+-   Muestreo con Hiperrectángulos\
+-   Muestreo Adaptativo (Crumbs)\
+-   Muestreo Reflectivo
+
+## Enfoques
+
+### ¿Cuál es la particularidad de cada uno?
+
+-   **Hiperrectángulos:** Extiende el método univariado generando un
+    cubo centrado en el punto actual. Si el punto propuesto queda fuera
+    del slice, se reduce su tamaño.\
+-   **Crumbs:** Utiliza los puntos rechazados como "migas" para guiar
+    nuevas propuestas.\
+-   **Reflectivo:** Utiliza gradientes y una dirección de “momentum”
+    para generar movimientos estructurados.
+
+## ¿Qué es una Caminata Aleatoria en MCMC?
+
+### Definición
+
+En los métodos de Monte Carlo basados en Cadenas de Markov (MCMC), una
+caminata aleatoria es un proceso estocástico a tiempo discreto donde el
+siguiente estado de la cadena se obtiene sumando un incremento aleatorio
+al estado actual. Formalmente:
+
+$$X_{t+1} = X_t + \epsilon_t$$
+
+donde:
+
+-   $X_t$: estado actual en el tiempo $t$\
+-   $\epsilon_t$: vector aleatorio extraído de una distribución $D$\
+-   $X_{t+1}$: nuevo estado propuesto\
+
+<style>
+.reveal .slides section.scrollable {
+  max-height: none;
+  overflow-y: auto;
+  padding-right: 15px;
+}
+</style>
+
+## Efectos Negativos de las Caminatas Aleatorias {.scrollable}
+
+- **Ineficiencia en la exploración del espacio y mezcla lenta** (pasos pequeños y altamente correlacionados)  
+- **Dificultad en la sintonización de parámetros y falta de adaptabilidad** (ajuste manual de parámetros)  
+- **Riesgo de atascarse en modos y producir resultados incorrectos** (exploración incompleta)  
+
+### ¿Cómo el Slice Sampling los soluciona?
+
+- **Adaptabilidad del tamaño de paso:** ajusta el tamaño y forma de los pasos automáticamente.  
+- **Facilidad de sintonización:** evita perturbar la distribución al autoajustarse.  
+- **Manejo de distribuciones complejas:** permite explorar múltiples modos y regiones con eficiencia.
+
+## Supresión de Caminatas Aleatorias
+
+
+
+:::{.columns}
+
+:::{.column width="50%"}
+
+### Overrelaxed Slice Sampling
+
+-Mejora la eficiencia
+
+-Aumenta la mezcla al reducir la aleatoriedad
+
+-Ideal para distribuciones condicionales unimodales
+:::
+
+:::{.column width="50%"}
+
+### Reflective Slice Sampling
+
+-Utiliza trayectorias para moverse
+
+-Evita rechazos
+
+-Eficiente en espacios multivariados complejos
+:::
+
+:::
+
+---
+
+## Comparación con otros metodos
+
+| Metodo              | Ventajas                         | Desventajas                   |
+|---------------------|----------------------------------|-------------------------------|
+| ARS y ARMS          |- Puede simular multimodales      |- ARS genera muestras ind.     |
+| vs Slice Sample u   |                                  |                               |
+| Overrelaxed         |                                  |                               |
+|                     |                                  |                               |
+| Metropolis-Hasting  |- No requiere sintonización       |- Mayor costo computacional    |
+| vs Reflective       |- No hay rechazos                 |                               |
+|                     |- Sí suprime Caminatas Aleatorias |                               |
+|                     |                                  |                               |
+| Gibbs Sampling      |- No requiere muestreo condicional|- Implementación más compleja  |
+| vs Reflective       |- Menor tiempo de mezcla          |                               |
+|                     |- No requiere priors conjugadas   |                               |
+|                     |                                  |                               |
+| Hybrid Monte Carlo  |- Mayor facilidad de sintonizar   |- Requiere más evaluaciones    |
+| vs Reflective       |                                  |                               |
+
+## Aplicaciones
+
+:::{.columns}
+
+:::{.column style="width:45%; font-size:70%;"}
+```r
+set.seed(123)
+f <- function(x) exp(-x^2 / 2) * cos(x)^2 #Funcion objetivo 
+# Función para Slice Sampling
+slice_sampler <- function(f, x0, n_samples, w = 1, m = 1000) {
+  samples <- numeric(n_samples)  # Inicializa vector de muestras
+  x <- x0  # Valor inicial
+  for (i in 1:n_samples) {
+    y <- runif(1, 0, f(x))
+    # Paso de expansión ("step out")
+    L <- x - runif(1, 0, w)  # Límite izquierdo aleatorio
+    R <- L + w  # Límite derecho inicial
+    while (f(L) > y && (x - L) < m * w) L <- L - w  # Expande a la izquierda
+    while (f(R) > y && (R - x) < m * w) R <- R + w  # Expande a la derecha
+    # Paso de reducción ("shrinkage")
+    repeat {
+      x_new <- runif(1, L, R)  # Muestra uniforme entre L y R
+      if (f(x_new) > y) break  # Acepta si está dentro de la rebanada
+      if (x_new < x) L <- x_new else R <- x_new  # Ajusta intervalo
+    }
+    x <- x_new  # Actualiza muestra
+    samples[i] <- x  # Guarda muestra
+  }
+  return(samples)  # Devuelve todas las muestras
+}
+# Ejecuta el sampler con 10,000 muestras
+samples <- slice_sampler(f, x0 = 0, n_samples = 10000)
+# Histograma de las muestras obtenidas
+hist(samples, freq = FALSE, breaks = 100,
+     main = "Slice Sampling Estandar")
+# Superpone la densidad teórica normalizada
+curve(f(x) / integrate(f, -10, 10)$value,
+      add = TRUE, col = "red")
+```
+
+:::
+
+:::{.column width="55%"}
+
+```{r, echo=FALSE}
+set.seed(123)
+f <- function(x) exp(-x^2 / 2) * cos(x)^2
+slice_sampler <- function(f, x0, n_samples, w = 1, m = 1000) {
+  samples <- numeric(n_samples)
+  x <- x0
+  for (i in 1:n_samples) {
+    y <- runif(1, 0, f(x))
+    L <- x - runif(1, 0, w)
+    R <- L + w
+    while (f(L) > y && (x - L) < m * w) L <- L - w
+    while (f(R) > y && (R - x) < m * w) R <- R + w
+    repeat {
+      x_new <- runif(1, L, R)
+      if (f(x_new) > y) break
+      if (x_new < x) L <- x_new else R <- x_new
+    }
+    x <- x_new
+    samples[i] <- x
+  }
+  return(samples)
+}
+samples <- slice_sampler(f, x0 = 0, n_samples = 10000)
+hist(samples, freq = FALSE, breaks = 100,
+     main = "Slice Sampling Estandar")
+curve(f(x) / integrate(f, -10, 10)$value,
+      add = TRUE, col = "red")
+```
+
+![](https://github.com/B-Jamett/TrabajoSimu/blob/main/slice_animado.gif?raw=true)
+
+:::
+
+:::
+
+## Aplicaciones
+
+:::{.columns}
+
+:::{.column style="width:45%; font-size:70%;"}
+```r
+# Definir función objetivo
+f = function(x) {
+return(dnorm(x,mean = 0, sd = 1)) # Normal estándar
+}
+# Función de overrelaxed slice sampling
+oss = function(f, x0, i = 5000, scale) {
+muestra = numeric(i)
+muestra[1] = x0
+for (i in 2:i) {
+# Definir la variable auxiliar y en el slice
+y = runif(1,0,f(muestra[i-1])) # Unifome (0, f(x0))
+# Paso del overrelaxed slice sampling
+p = muestra[i-1] + (runif(1) - 0.5) * 2 * scale
+# Aceptar o rechazar la propuesta
+if (f(p) >= y) {
+muestra[i] = p
+}
+else {
+muestra[i] = muestra [i-1]
+}
+}
+return(muestra)
+}
+# Aplicar la función
+set.seed(26)
+muestras = oss(f, x0 = 0, scale = 0.3)
+# Graficar
+hist(muestras, breaks = 30, probability = TRUE,
+main = "Overrelaxed Slice Sampling",
+xlab = "Muestras", col = "lightblue", border = "black")
+curve(dnorm(x), add = TRUE, col = "red", lwd = 2)
+```
+
+:::
+
+:::{.column width="55%"}
+
+```{r, echo=FALSE}
+# Definir función objetivo
+f = function(x) {
+return(dnorm(x,mean = 0, sd = 1)) # Normal estándar
+}
+# Función de overrelaxed slice sampling
+oss = function(f, x0, i = 5000, scale) {
+muestra = numeric(i)
+muestra[1] = x0
+for (i in 2:i) {
+# Definir la variable auxiliar y en el slice
+y = runif(1,0,f(muestra[i-1])) # Unifome (0, f(x0))
+# Paso del overrelaxed slice sampling
+p = muestra[i-1] + (runif(1) - 0.5) * 2 * scale
+# Aceptar o rechazar la propuesta
+if (f(p) >= y) {
+muestra[i] = p
+}
+else {
+muestra[i] = muestra [i-1]
+}
+}
+return(muestra)
+}
+# Aplicar la función
+set.seed(26)
+muestras = oss(f, x0 = 0, scale = 0.3)
+# Graficar
+hist(muestras, breaks = 30, probability = TRUE,
+main = "Overrelaxed Slice Sampling",
+xlab = "Muestras", col = "lightblue", border = "black")
+curve(dnorm(x), add = TRUE, col = "red", lwd = 2)
+```
+![](https://github.com/B-Jamett/TrabajoSimu/blob/main/oss_animado.gif?raw=true)
+
+:::
+
+:::
+
+## Aplicaciones
+
+:::{.columns}
+
+:::{.column style="width:45%; font-size:70%;"}
+```r
+library(plotly)
+library(tidyverse)
+log_f_3d <- function(x) {
+  if (any(x < 0) || any(x > 1) || sum(x) > 1) return(-Inf)  # Fuera del dominio permitido (simplex)
+  -20 * (x[1] - 0.2)^2 - 15 * (x[2] - 0.4)^2 - 10 * (x[3] - 0.3)^2  # Log-densidad objetivo
+}
+
+reflective_slice_sampler <- function(log_f, x0, n_samples = 1000, w = 0.1) {
+  d <- length(x0)  # Dimensión del espacio
+  samples <- matrix(NA, nrow = n_samples, ncol = d)  # Almacén de muestras
+  x <- x0  # Punto inicial
+  for (i in 1:n_samples) {
+    log_y <- log_f(x) - rexp(1)  # Nivel vertical aleatorio
+    dir <- rnorm(d); dir <- dir / sqrt(sum(dir^2))  # Dirección aleatoria normalizada
+    u <- runif(1, 0, w); L <- -u; R <- w - u  # Intervalo inicial centrado
+    repeat {
+      t <- runif(1, L, R)  # Paso aleatorio dentro del intervalo
+      x_prop <- x + t * dir  # Propuesta en esa dirección
+      x_prop <- pmin(pmax(x_prop, 0), 1)  # Reflejo en los bordes [0,1]
+
+      if (sum(x_prop) > 1) {  # Reflejo adicional si se excede el simplex
+        exceso <- sum(x_prop) - 1
+        x_prop <- x_prop - 2 * exceso * (x_prop / sum(x_prop))
+        if (any(x_prop < 0) || any(x_prop > 1) || sum(x_prop) > 1) next
+      }
+
+      if (log_f(x_prop) >= log_y) {  # Aceptación
+        x <- x_prop; break
+      } else {
+        if (t < 0) L <- t else R <- t  # Ajuste del intervalo
+      }
+    }
+    samples[i, ] <- x  # Guardar muestra
+  }
+  return(samples)
+}
+
+set.seed(42)
+samples_3d <- reflective_slice_sampler(
+  log_f_3d, x0 = c(0.3,0.3,0.3), n_samples = 5000
+)  # Generar 5000 muestras
+
+df_3d <- data.frame(
+  x = samples_3d[,1],
+  y = samples_3d[,2],
+  z = samples_3d[,3]
+)  # Convertir a data frame para graficar
+
+plot_ly(df_3d, x = ~x, y = ~y, z = ~z,
+  type = "scatter3d", mode = "markers",
+  marker = list(size = 2, color = 'blue', opacity = 0.5)) %>%
+  layout(title = "Muestras generadas por Reflective Slice Sampling (3D)",
+    scene = list(
+      xaxis = list(title = "Redes"),
+      yaxis = list(title = "Buscadores"),
+      zaxis = list(title = "Correo")))  # Gráfico 3D de las muestras
+
+```
+
+:::
+
+:::{.column width="55%"}
+
+```{r, echo=FALSE}
+library(plotly)
+library(tidyverse)
+log_f_3d <- function(x) {
+  if (any(x < 0) || any(x > 1) || sum(x) > 1) return(-Inf)  # Fuera del dominio permitido (simplex)
+  -20 * (x[1] - 0.2)^2 - 15 * (x[2] - 0.4)^2 - 10 * (x[3] - 0.3)^2  # Log-densidad objetivo
+}
+
+reflective_slice_sampler <- function(log_f, x0, n_samples = 1000, w = 0.1) {
+  d <- length(x0)  # Dimensión del espacio
+  samples <- matrix(NA, nrow = n_samples, ncol = d)  # Almacén de muestras
+  x <- x0  # Punto inicial
+  for (i in 1:n_samples) {
+    log_y <- log_f(x) - rexp(1)  # Nivel vertical aleatorio
+    dir <- rnorm(d); dir <- dir / sqrt(sum(dir^2))  # Dirección aleatoria normalizada
+    u <- runif(1, 0, w); L <- -u; R <- w - u  # Intervalo inicial centrado
+    repeat {
+      t <- runif(1, L, R)  # Paso aleatorio dentro del intervalo
+      x_prop <- x + t * dir  # Propuesta en esa dirección
+      x_prop <- pmin(pmax(x_prop, 0), 1)  # Reflejo en los bordes [0,1]
+
+      if (sum(x_prop) > 1) {  # Reflejo adicional si se excede el simplex
+        exceso <- sum(x_prop) - 1
+        x_prop <- x_prop - 2 * exceso * (x_prop / sum(x_prop))
+        if (any(x_prop < 0) || any(x_prop > 1) || sum(x_prop) > 1) next
+      }
+
+      if (log_f(x_prop) >= log_y) {  # Aceptación
+        x <- x_prop; break
+      } else {
+        if (t < 0) L <- t else R <- t  # Ajuste del intervalo
+      }
+    }
+    samples[i, ] <- x  # Guardar muestra
+  }
+  return(samples)
+}
+
+set.seed(42)
+samples_3d <- reflective_slice_sampler(
+  log_f_3d, x0 = c(0.3,0.3,0.3), n_samples = 5000
+)  # Generar 5000 muestras
+
+df_3d <- data.frame(
+  x = samples_3d[,1],
+  y = samples_3d[,2],
+  z = samples_3d[,3]
+)  # Convertir a data frame para graficar
+
+plot_ly(df_3d, x = ~x, y = ~y, z = ~z,
+        type = "scatter3d", mode = "markers",
+        marker = list(size = 2, color = 'blue', opacity = 0.5)) %>%
+  layout(title = "Muestras generadas por Reflective Slice Sampling (3D)",
+         scene = list(
+           xaxis = list(title = "Redes"),
+           yaxis = list(title = "Buscadores"),
+           zaxis = list(title = "Correo")
+         ))
+
+```
+
+:::
+
+:::
+
+## Aplicaciones
+
+![](https://github.com/B-Jamett/TrabajoSimu/blob/main/reflective_slice_sampling.gif?raw=true)
+
+# Conclusión
